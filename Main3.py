@@ -1,9 +1,11 @@
-import pygame
+import os
 import random
 import sys
-import os
 
-def load_image(name):
+import pygame
+
+
+def load_image(name, colorkey=None):
     fullname = os.path.join('data', name)
     try:
         return pygame.image.load(fullname)
@@ -11,59 +13,32 @@ def load_image(name):
         print('Cannot load image:', name)
         raise SystemExit(message)
 
-def load_file(name):
-    fullname = os.path.join('data', name)
-    try:
-        return open(fullname, mode="r").readlines()
-    except FileNotFoundError as message:
-        print('Cannot load file:', name)
-        raise SystemExit(message)
-
-def load_level(filename):
-    filename = "data/" + filename
-    # читаем уровень, убирая символы перевода строки
-    try:
-        with open(filename, 'r') as mapFile:
-            level_map = [line.strip() for line in mapFile]
-            # и подсчитываем максимальную длину
-            maxWidth = max(map(len, level_map))
-            # дополняем каждую строку пустыми клетками ('.')
-            return list(map(lambda x: x.ljust(maxWidth, '.'), level_map))
-    except FileNotFoundError:
-        return None
-
-
-def load_music(name):
-    fullname = os.path.join('data\\Music', name)
-    try:
-        return pygame.mixer.Sound(fullname)
-    except pygame.error as message:
-        print('Cannot load music:', name)
-        raise SystemExit(message)
-
 
 def terminate():
-    end_music.stop()
     pygame.quit()
     sys.exit()
 
 
+def load_level(filename):
+    filename = "data/" + filename
+    # читаем уровень, убирая символы перевода строки
+    with open(filename, 'r') as mapFile:
+        level_map = [line.strip() for line in mapFile]
+
+    # и подсчитываем максимальную длину
+    maxWidth = max(map(len, level_map))
+
+    # дополняем каждую строку пустыми клетками ('.')
+    return list(map(lambda x: x.ljust(maxWidth, '.'), level_map))
+
+
 class Board:
     def __init__(self):
-        self.level = 0
-        self.board_size = board_size
-        self.create_lvl()
-
-    def create_lvl(self):
-        food.empty()
-        ghosts.empty()
-        walls.empty()
-        self.level += 1
+        self.level = 1
         self.lvl = load_level("lvl" + str(self.level))
-        if self.lvl is None:
-            self.level = 1
-            self.lvl = load_level("lvl" + str(self.level))
-
+        self.board_size = board_size
+        #self.create_board(True)
+        flag = True
         for i in range(len(self.lvl)):
             for j in range(len(self.lvl[i])):
                 if self.lvl[i][j] == ".":
@@ -83,38 +58,28 @@ class Board:
                     Ghost((j, i))
 
     def new_live(self):
-        for ghost in ghosts:
-            ghost.speed = 0
-        pl.alive = False
-        pl.speed = 0
-
-    def create_new_live_board(self):
+        pygame.time.delay(100)
         self.create_board()
-        pl.alive = True
-        pl.speed = speed
         pygame.time.delay(500)
-        main_music.play(-1)
 
     def create_board(self):
-        cur_ghost = 0
+        q = 0
         for i in range(len(self.lvl)):
             for j in range(len(self.lvl[i])):
                 if self.lvl[i][j] == pacman:
                     pl.pos = [j, i]
                     pl.place = [left_side + pl.pos[0] * board_size, pl.pos[1] * board_size]
                     pl.rect.x, pl.rect.y = pl.place
-                    pl.dead_cur_frame = 0
                     pl.way = "l"
                 elif self.lvl[i][j] == enemy:
                     t = 0
-                    for ghost in ghosts:
-                        if t == cur_ghost:
-                            ghost.pos = [j, i]
-                            ghost.place = [left_side + ghost.pos[0] * board_size, ghost.pos[1] * board_size]
-                            ghost.rect.x, ghost.rect.y = ghost.place
-                            ghost.way = "l"
-                            ghost.speed = speed
-                            cur_ghost += 1
+                    for y in ghosts:
+                        if t == q:
+                            y.pos = [j, i]
+                            y.place = [left_side + y.pos[0] * board_size, y.pos[1] * board_size]
+                            y.rect.x, y.rect.y = y.place
+                            y.way = "l"
+                            q += 1
                             break
                         t += 1
 
@@ -134,19 +99,16 @@ class Player(pygame.sprite.Sprite):
         self.cur_way = self.way  # current way
         self.speed = speed
         self.lives = 3
-        self.pos = pos
+
+        self.pos = pos[:]
         self.place = [left_side + self.pos[0] * board_size, self.pos[1] * board_size]
         self.frames = []
-        self.dead_frames = []
-        self.cut_sheet(load_image("pacman_r6.png"), 1, 6, True)
+        self.cut_sheet(load_image("pacman_r6.png"), 1, 6)
         self.cur_frame = 0
         self.open = True
         self.image = self.frames[self.cur_frame]
-        self.cut_sheet(load_image("pacman_d_right.png"), 1, 10, False)
-        self.dead_cur_frame = 0
-        self.alive = True
 
-    def cut_sheet(self, sheet, columns, rows, main):
+    def cut_sheet(self, sheet, columns, rows):
         self.rect = pygame.Rect(self.place[0], self.place[1], sheet.get_width() // columns, sheet.get_height() // rows)
         if self.rect.width != self.rect.height:
             self.rect.width, self.rect.height = min(self.rect.width, self.rect.height), min(self.rect.width,
@@ -154,10 +116,7 @@ class Player(pygame.sprite.Sprite):
         for j in range(rows):
             for i in range(columns):
                 frame_location = (self.rect.w * i, self.rect.h * j)
-                if main:
-                    self.frames.append(sheet.subsurface(pygame.Rect(frame_location, self.rect.size)))
-                else:
-                    self.dead_frames.append(sheet.subsurface(pygame.Rect(frame_location, self.rect.size)))
+                self.frames.append(sheet.subsurface(pygame.Rect(frame_location, self.rect.size)))
 
     def turn_image(self):
         if self.way == "l":
@@ -214,15 +173,11 @@ class Player(pygame.sprite.Sprite):
                 self.speed = 0
         if pygame.sprite.spritecollideany(self, ghosts):
             for i in ghosts:
-                if i.pos == self.pos and self.alive:
-                    main_music.stop()
+                if i.pos == self.pos:
                     if self.lives == 0:
-                        end_music.play(-1)
                         Gameover()
                     else:
-                        death_music.play()
                         self.lives -= 1
-                        stats.pacman_lives()
                         board.new_live()
 
         if self.way == "l":
@@ -233,51 +188,37 @@ class Player(pygame.sprite.Sprite):
             self.place[1] -= self.speed
         elif self.way == "d":
             self.place[1] += self.speed
-        if self.way == "r" and self.place[0] % board_size > board_size // 4 and self.pos[0] * board_size + left_side < \
+        if self.way == "r" and self.place[0] % board_size > board_size / 2 and self.pos[0] * board_size + left_side < \
                 self.place[0]:
             self.pos[0] += 1
-        elif self.way == "l" and self.place[0] % board_size < board_size // 4 and self.pos[0] * board_size + left_side > \
+        elif self.way == "l" and self.place[0] % board_size < board_size / 2 and self.pos[0] * board_size + left_side > \
                 self.place[0]:
             self.pos[0] -= 1
-        elif self.way == "d" and self.place[1] % board_size > board_size // 4 and self.pos[1] * board_size < self.place[
+        elif self.way == "d" and self.place[1] % board_size > board_size / 2 and self.pos[1] * board_size < self.place[
             1]:
             self.pos[1] += 1
-        elif self.way == "u" and self.place[1] % board_size < board_size // 4 and self.pos[1] * board_size > self.place[
+        elif self.way == "u" and self.place[1] % board_size < board_size / 2 and self.pos[1] * board_size > self.place[
             1]:
             self.pos[1] -= 1
-        if self.alive:
-            self.hot_change_way()
-            if self.place[0] % board_size == 0 and self.place[1] % board_size == 0:
-                self.check_way()
-                self.change_way()
-
-    def next_lvl(self):
-        self.pos = board.pacman
-        self.way = "l"
-        self.place = [left_side + self.pos[0] * board_size, self.pos[1] * board_size]
-        self.rect.x, self.rect.y = self.place[0], self.place[1]
-        pygame.time.delay(500)
+        self.hot_change_way()
+        if self.place[0] % board_size == 0 and self.place[1] % board_size == 0:
+            self.check_way()
+            self.change_way()
 
     def change_frame(self):
-        if self.alive:
-            if self.cur_frame + 1 == len(self.frames):
-                self.open = False
-            elif self.cur_frame == 0:
-                self.open = True
-            if self.open:
-                self.cur_frame += 1
-            else:
-                self.cur_frame -= 1
+        if self.cur_frame + 1 == len(self.frames):
+            self.open = False
+        elif self.cur_frame == 0:
+            self.open = True
+        if self.open:
+            self.cur_frame += 1
         else:
-            self.dead_cur_frame += 1
+            self.cur_frame -= 1
 
     def update(self, event):
         if event:
             self.change_frame()
-            if self.alive:
-                self.image = self.frames[self.cur_frame]
-            else:
-                self.image = self.dead_frames[self.dead_cur_frame]
+            self.image = self.frames[self.cur_frame]
             self.turn_image()
         try:
             self.cur_way = self.ways[event.key]
@@ -382,6 +323,9 @@ class Ghost(pygame.sprite.Sprite):
                 self.way = self.random_ways[i]
                 i += 1
 
+    def first_init(self):
+        self.change_way()
+
     def update(self):
         if self.way == "l":
             self.rect.x -= self.speed
@@ -395,16 +339,16 @@ class Ghost(pygame.sprite.Sprite):
         elif self.way == "d":
             self.rect.y += self.speed
             self.place[1] += self.speed
-        if self.way == "r" and self.place[0] % board_size > board_size // 4 and self.pos[0] \
+        if self.way == "r" and self.place[0] % board_size > board_size / 2 and self.pos[0] \
                 * board_size + left_side < self.place[0]:
             self.pos[0] += 1
-        elif self.way == "l" and self.place[0] % board_size < board_size // 4 and self.pos[0] \
+        elif self.way == "l" and self.place[0] % board_size < board_size / 2 and self.pos[0] \
                 * board_size + left_side > self.place[0]:
             self.pos[0] -= 1
-        elif self.way == "d" and self.place[1] % board_size > board_size // 4 and self.pos[1] \
+        elif self.way == "d" and self.place[1] % board_size > board_size / 2 and self.pos[1] \
                 * board_size < self.place[1]:
             self.pos[1] += 1
-        elif self.way == "u" and self.place[1] % board_size < board_size // 4 and self.pos[1] \
+        elif self.way == "u" and self.place[1] % board_size < board_size / 2 and self.pos[1] \
                 * board_size > self.place[1]:
             self.pos[1] -= 1
 
@@ -446,11 +390,11 @@ class Food(pygame.sprite.Sprite):
         self.image = self.frames[self.cur_frame]
 
     def cut_sheet(self, sheet, columns, rows):
-        self.rect = pygame.Rect(left_side + self.pos[0] * board_size, self.pos[1] * board_size,
-                                sheet.get_width() // columns, sheet.get_height() // rows)
+        self.rect = pygame.Rect(left_side + self.pos[0] * 40, self.pos[1] * 40, sheet.get_width() // columns,
+                                sheet.get_height() // rows)
         if self.rect.width != self.rect.height:
-            self.rect.width, self.rect.height = min(self.rect.width, self.rect.height), \
-                                                min(self.rect.width, self.rect.height)
+            self.rect.width, self.rect.height = min(self.rect.width, self.rect.height), min(self.rect.width,
+                                                                                            self.rect.height)
         for j in range(rows):
             for i in range(columns):
                 frame_location = (self.rect.w * i, self.rect.h * j)
@@ -476,6 +420,7 @@ class Stats_board:
         self.score = 0
         self.text = []
         self.text_rect = []
+
         self.text_color = pygame.Color("white")
         self.font_color = pygame.Color("gray")
         self.text.append("Score:")
@@ -484,10 +429,6 @@ class Stats_board:
         self.text_rect.append(pygame.Rect(50, 80, 100, 50))
         self.lvl = 1
         self.space = 50
-        self.pacman_image = pygame.transform.scale(load_image("pacman_live.png"), (40, 40))
-        self.pacman_space = 45
-        self.lives_text = "Lives:"
-        self.lives_rect = pygame.Rect(40, 550, 140, 60)
         self.open_high_score()
 
     def render(self, surface):
@@ -497,18 +438,9 @@ class Stats_board:
             self.rendered_rect = self.rendered_text.get_rect(x=self.text_rect[i].x + 2,
                                                              centery=self.text_rect[i].centery + self.space * (i // 2))
             surface.blit(self.rendered_text, self.rendered_rect)
-        if start:
-            font = pygame.font.Font(None, self.lives_rect.height - 4)
-            self.rendered_text = font.render(self.lives_text, 1, self.font_color)
-            self.rendered_rect = self.rendered_text.get_rect(x=self.lives_rect.x + 2, centery=self.lives_rect.centery)
-            surface.blit(self.rendered_text, self.rendered_rect)
-            for i in range(self.lives):
-                rect = self.lives_rect.copy()
-                rect.x, rect.y = self.lives_rect.right - 60 - i * self.pacman_space, self.lives_rect.bottom
-                surface.blit(self.pacman_image, rect)
 
     def open_high_score(self):
-        file = load_file("High score")
+        file = open("data\High score", mode="r").readlines()
         self.text.append("High Score:")
         self.text_rect.append(pygame.Rect(1020, 20, 80, 50))
         for i in range(len(file)):
@@ -518,12 +450,10 @@ class Stats_board:
             self.text_rect.append(pygame.Rect(1050, 60 + (self.space * (i)) // 2, 80, 40))
             self.text_rect.append(pygame.Rect(1050, 40 + (self.space * (i)) // 2, 80, 40))
 
+
     def add_score(self, score):
         self.score += score
         self.text[1] = str(self.score).rjust(6, "0")
-
-    def pacman_lives(self):
-        self.lives = pl.lives
 
 
 class Border(pygame.sprite.Sprite):
@@ -544,12 +474,12 @@ class Border(pygame.sprite.Sprite):
 class Gameover(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__(gameover)
-        self.rect = pygame.Rect(width - left_side, 0, width - 2 * left_side, height)
-        self.image = pygame.transform.scale(load_image("gameover.png"), (width - 2 * left_side, height))
+        self.rect = pygame.Rect(width - left_side, 0, 800, height)
+        self.image = pygame.transform.scale(load_image("gameover.png"), (800, 800))
         self.end = False
 
     def update(self):
-        if self.rect.x != left_side:
+        if self.rect.x != 200:
             self.rect.x -= 5
         else:
             self.end = True
@@ -559,14 +489,7 @@ width, height = 1200, 800
 screen_size = (width, height)
 
 screen = pygame.display.set_mode(screen_size)
-screen.fill(pygame.Color("black"))
-
-pygame.mixer.init()
-pygame.mixer.music.set_volume(2.0)
-begin_music = load_music("pacman_beginning.wav")
-main_music = load_music("pacman_chomp.wav")
-death_music = load_music("pacman_death.wav")
-end_music = load_music("pacman_intermission.wav")
+screen.fill(pygame.Color("white"))
 
 fps = 50
 clock = pygame.time.Clock()
@@ -579,7 +502,6 @@ enemy = "$"
 
 all_sprites = pygame.sprite.Group()
 gameover = pygame.sprite.Group()
-wingame = pygame.sprite.Group()
 ghosts = pygame.sprite.Group()
 player = pygame.sprite.Group()
 walls = pygame.sprite.Group()
@@ -588,9 +510,8 @@ horizontal_borders = pygame.sprite.Group()
 vertical_borders = pygame.sprite.Group()
 lives = pygame.sprite.Group()
 
-
-Border(left_side, 0, width - left_side, 0)
-Border(left_side, height - 1, width - left_side, height - 1)
+Border(left_side, 0, width - 200, 0)
+Border(left_side, height - 1, width - 200, height - 1)
 Border(left_side, 0, left_side, height)
 Border(width - 201, 0, width - 201, height)
 
@@ -602,13 +523,17 @@ blink = pygame.USEREVENT + 2
 blink_time = 150
 pygame.time.set_timer(blink, blink_time)
 
+end = pygame.USEREVENT+3
+end_time = 5000
+pygame.time.set_timer(eat, end_time)
+
 stats = Stats_board()
 
 running = True
 start = False
+end_game = False
 pre_game_rect = pygame.Rect(225, 650, 400, 95)
 pre_game_text = "Press any button to start"
-begin_music.play(-1)
 
 while running:
     for event in pygame.event.get():
@@ -617,12 +542,9 @@ while running:
             terminate()
 
         if event.type == pygame.KEYDOWN and not start:
-            begin_music.stop()
-            main_music.play(-1)
             start = True
             board = Board()
             pl = Player(board.pacman)
-            stats.pacman_lives()
 
         if event.type == pygame.KEYDOWN:
             player.update(event)
@@ -633,20 +555,24 @@ while running:
         if event.type == blink:
             food.update(True)
 
-        if start and not pl.alive and pl.dead_cur_frame == len(pl.dead_frames) - 1:
-            board.create_new_live_board()
+        if event.type == end and end_game:
+            terminate()
 
-        if start and len(food) == 0:
-            board.create_lvl()
-            pl.next_lvl()
+        if len(gameover) > 0 and not end_game:
+            for i in gameover:
+                if i.end == True:
+                    end_game = True
+
+
+
     screen.fill(pygame.Color("black"))
-
     if not start:
         font = pygame.font.Font(None, pre_game_rect.height - 4)
         rendered_text = font.render(pre_game_text, 1, pygame.Color("Grey"))
         rendered_rect = rendered_text.get_rect(x=pre_game_rect.x + 2, centery=pre_game_rect.centery)
         screen.blit(rendered_text, rendered_rect)
 
+    # board.render()
     horizontal_borders.draw(screen)
     vertical_borders.draw(screen)
     food.draw(screen)
