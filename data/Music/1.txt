@@ -1,0 +1,3 @@
+https://habrahabr.ru/post/347286/
+https://toster.ru/q/235775
+https://stackoverflow.com/questions/7746263/how-play-mp3-with-pygame
